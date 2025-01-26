@@ -131,6 +131,21 @@ function add_params()
       params:set("play_mode_" .. i, 4)
     end
   end}
+  params:add{type = "trigger", id = "launch_mode_all_loop", name = "Launch Mode: All Loop", action = function()
+    for i = 36, num_samples - 1 do
+      params:set("play_mode_" .. i, 1)
+    end
+  end}
+  params:add{type = "trigger", id = "quality_all_nasty", name = "Quality: All Nasty", action = function()
+    for i = 36, num_samples - 1 do
+      params:set("quality_" .. i, 1)
+    end
+  end}
+  params:add{type = "trigger", id = "quality_all_high", name = "Quality, All High", action = function()
+    for i = 36, num_samples - 1 do
+      params:set("quality_" .. i, 4)
+    end
+  end}
   
   params:add_separator()
   -- Index zero to align with MIDI note numbers
@@ -162,7 +177,7 @@ end
 
 function note_on(sample_id, vel)
   if timber.samples_meta[sample_id].num_frames > 0 then
-    print("note_on", sample_id)
+    --print("note_on", sample_id)
     vel = vel or 1
     engine.noteOn(sample_id, MusicUtil.note_num_to_freq(60), vel, sample_id)
     sample_status[sample_id] = STATUS.PLAYING
@@ -171,7 +186,7 @@ function note_on(sample_id, vel)
 end
 
 function note_off(sample_id)
-  print("note_off", sample_id)
+  --print("note_off", sample_id)
   engine.noteOff(sample_id)
 
 end
@@ -266,6 +281,11 @@ end
 -------------------------
 
 -- 1=lvl, 2=rate
+
+local function position_callback(pos)
+  print(pos)
+end
+
 local v = {
   {1,1,1,1},
   {1,1,1,1},
