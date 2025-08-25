@@ -24,6 +24,9 @@ local recOn = false
 local odOff = false
 local odOn = false
 
+-- Knob Turns
+local sChng = false
+
 -- tempo related
 local daBeat = 1
 local temp0 = 120
@@ -359,6 +362,11 @@ function tempo(v)
       end
     end
     
+    if sChng then
+      speedChng()
+      sChng = false
+    end
+    
     if daBeat == 4 then
       daBeat = 1
       else
@@ -368,6 +376,11 @@ function tempo(v)
   end
 end
 
+function speedChng()
+  -- change the speed
+  softcut.rate(s1, v[s2][s1])
+  print("speed changed on beat!")
+end
 
 function rec(i)
   start_time[i] = util.time()
@@ -476,13 +489,14 @@ function enc(n,z)
     -- change selected feature.
     if s2 == 1 then
       -- change volume for selected voice.
-      v[s2][s1] = util.clamp(v[s2][s1]+ (z*.1),0,10)
+      v[s2][s1] = util.clamp(v[s2][s1]+ (z*.01),0,10)
       softcut.level(s1, v[s2][s1])
       print(v[s2][s1])
     elseif s2 == 2 then
       -- change rate for selected voice
       v[s2][s1] = util.clamp(v[s2][s1]+(z*.5),-2,2)
-      softcut.rate(s1, v[s2][s1])
+      sChng = true
+      --softcut.rate(s1, v[s2][s1])
     elseif s2 == 3 then
       if v[s2][s1] >= 500 then 
         v[s2][s1] = v[s2][s1] + (z*150)
