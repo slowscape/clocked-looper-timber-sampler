@@ -282,6 +282,28 @@ end
 
 -- END TIMBER sTUFF
 -------------------------
+-- END TIMBER sTUFF
+-------------------------
+-- END TIMBER sTUFF
+-------------------------
+-- END TIMBER sTUFF
+-------------------------
+-- END TIMBER sTUFF
+-------------------------
+-- END TIMBER sTUFF
+-------------------------
+-- END TIMBER sTUFF
+-------------------------
+-- END TIMBER sTUFF
+-------------------------
+-- END TIMBER sTUFF
+-------------------------
+-- END TIMBER sTUFF
+-------------------------
+-- END TIMBER sTUFF
+-------------------------
+-- END TIMBER sTUFF
+-------------------------
 
 -- 1=lvl, 2=rate
 
@@ -331,9 +353,9 @@ function init()
     softcut.pan(i, 0)
     softcut.play(i, 1)
     softcut.rate(i, 1)
-    softcut.rate_slew_time(i,0.1)
+    softcut.rate_slew_time(i,0.5)
     softcut.loop(i, 1)
-    softcut.fade_time(i, 0.1)
+    softcut.fade_time(i, 0.05)
     softcut.rec(i, 1)
     softcut.rec_level(i, 0)
     softcut.pre_level(i, 0.5)
@@ -352,9 +374,9 @@ function tempo(v)
         rec(s1)
         recOn = false
       else if odOn then
-        ovrdub(s1)
+        playPause(s1)
         odOn = false
-        else if recOff or odOff then
+        else if recOff then
           play(s1)
           recOff = false
           odOff = false
@@ -379,7 +401,7 @@ end
 function speedChng()
   -- change the speed
   softcut.rate(s1, v[s2][s1])
-  print("speed changed on beat!")
+  --print("speed changed on beat!")
 end
 
 function rec(i)
@@ -427,7 +449,6 @@ end
 function play(i)
   loop_len[i] = util.time() - start_time[i]
   print(loop_len[i])
-  softcut.level(i,1)
   softcut.rec_level(i, 0)
   softcut.pre_level(i, 1)
   if i <=2 then
@@ -441,8 +462,32 @@ function play(i)
     softcut.loop_end(i, loop_len[i] + 45)
     print("play "..i.." loop end "..loop_len[i])
   end
+  v[1][i] = 1 
+  softcut.level(i, v[1][i])
   state[i] = "play"
 end
+
+function playPause(i)
+  print(v[1][s1])
+  if state[i]=="play" then
+    v[2][s1] = 0
+    softcut.rate(i, v[2][s1])
+    state[i]="stop"
+    else if state[i]=="stop"then
+      if i <=2 then
+        softcut.position(i, 1.15)
+      else
+        softcut.position(i, 45.15)
+      end
+      
+      v[2][s1] = 1
+      softcut.rate(i, v[2][s1])
+      state[i]="play"
+      
+    end
+end
+end
+
 
 function key(n,z)
   
@@ -453,12 +498,10 @@ function key(n,z)
     modd = false
   end
 
-  if n==2 and z==1 and state[s1]~="rec" then
+  if n==2 and z==1 then
     odOn = true
+    --playPause(s1)
     --ovrdub(s1)
-  elseif n==2 and z==1 and state[s1]=="rec" then
-    odOff = true
-    --play(s1)
   end
   
   if n==3 and z==1 and not modd and state[s1]~="rec" then
@@ -509,7 +552,15 @@ function enc(n,z)
   end
   redraw()
 end
-
+------ dRawiNG stUFF ---------
+------ dRawiNG stUFF ---------
+------ dRawiNG stUFF ---------
+------ dRawiNG stUFF ---------
+------ dRawiNG stUFF ---------
+------ dRawiNG stUFF ---------
+------ dRawiNG stUFF ---------
+------ dRawiNG stUFF ---------
+------ dRawiNG stUFF ---------
 ------ dRawiNG stUFF ---------
 -- Images
 local t1 = {
