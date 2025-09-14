@@ -23,6 +23,7 @@ local recOff = false
 local recOn = false
 local odOff = false
 local odOn = false
+local speedStop = false
 
 -- Knob Turns
 local sChng = false
@@ -353,7 +354,8 @@ function init()
     softcut.pan(i, 0)
     softcut.play(i, 1)
     softcut.rate(i, 1)
-    softcut.rate_slew_time(i,0.5)
+    slewTime = 0.5
+    softcut.rate_slew_time(i, slewTime)
     softcut.loop(i, 1)
     softcut.fade_time(i, 0.05)
     softcut.rec(i, 1)
@@ -373,16 +375,17 @@ function tempo(v)
     if recOn then
         rec(s1)
         recOn = false
-      else if odOn then
-        playPause(s1)
-        odOn = false
         else if recOff then
           play(s1)
           recOff = false
-          odOff = false
         end
-      end
     end
+    
+    if speedStop == true then
+      playPause(s1)
+      speedStop = false
+    end
+    
     
     if sChng then
       speedChng()
@@ -422,6 +425,9 @@ function rec(i)
   softcut.level(i,0)
   softcut.rec_level(i, 1)
   softcut.pre_level(i, 0)
+  softcut.rate_slew_time(i,0.0)  
+  v[2][i] = 1
+  softcut.rate(i, v[2][i])
   state[i] = "rec"
   print("recording "..i)
 end
@@ -464,6 +470,7 @@ function play(i)
   end
   v[1][i] = 1 
   softcut.level(i, v[1][i])
+  softcut.rate_slew_time(i,slewTime) 
   state[i] = "play"
 end
 
@@ -499,7 +506,14 @@ function key(n,z)
   end
 
   if n==2 and z==1 then
-    odOn = true
+    
+    if state[s1]=="play" then
+      playPause(s1) 
+    else
+      speedStop = true
+    end
+    
+    --odOn = true
     --playPause(s1)
     --ovrdub(s1)
   end
@@ -537,7 +551,7 @@ function enc(n,z)
       print(v[s2][s1])
     elseif s2 == 2 then
       -- change rate for selected voice
-      v[s2][s1] = util.clamp(v[s2][s1]+(z*.5),-2,2)
+      v[s2][s1] = util.clamp(v[s2][s1]+(z*.25),-2,2)
       sChng = true
       --softcut.rate(s1, v[s2][s1])
     elseif s2 == 3 then
