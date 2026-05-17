@@ -1,6 +1,7 @@
--- clocked 4 track looper with sample player (timber)
--- for use with a beatstep pro (drum channel).
-
+-- Clocked 4 track looper with sample player (timber)
+-- Designed for use with a beatstep pro.
+-- Channel 1 & 2 = pitched sample player, Channel 3 = sample player.
+--
 -- Load & edit samples in EDIT menu
 -- E1 = Select Voice
 -- E2 = Select Level or Rate
@@ -9,6 +10,7 @@
 -- K3 = Record / Play
 -- K1 + E3 = Change BPM (if not MIDI controlled)
 --
+-- v 2.0 @ slowscape
 
 local cs = require 'controlspec'
 local state = {"stop","stop","stop","stop"}
@@ -45,6 +47,36 @@ local Formatters = require "formatters"
 local fileselect = require "fileselect"
 
 engine.name = "Timber"
+num_samples = 55
+
+local options = {}
+options.OFF_ON = {"Off", "On"}
+
+local sample_status = {}
+local STATUS = {
+  STOPPED = 0,
+  STARTING = 1,
+  PLAYING = 2,
+  STOPPING = 3
+}
+
+local current_sample_id = 0
+
+local midi_in_device
+local midi_clock_in_device
+local grid_device
+
+---------------------------------
+-- TImbeR
+
+--TIMBER controls
+local timber = include("timber/lib/timber_engine")
+local MusicUtil = require "musicutil"
+--local UI = require "ui"
+local Formatters = require "formatters"
+local fileselect = require "fileselect"
+
+engine.name = "Timber"
 num_samples = 52
 
 local options = {}
@@ -64,42 +96,35 @@ local midi_in_device
 local midi_clock_in_device
 local grid_device
 
+-- Forward declaration so add_params can reference it safely
+local reconnect_midi_ins
+
 -- timber stuff
 
 function load_folder(file, add)
+  -- Samples for ch3 always start at slot 36
   local sample_id = 36
   local split_at = string.match(file, "^.*()/")
   local folder = string.sub(file, 1, split_at)
   file = string.sub(file, split_at + 1)
 
-  if add then
-    for i = timber.num_samples - 1, 0, -1 do
-      if timber.samples_meta[i].num_frames > 0 then
-        sample_id = i + 1
-        print("sAMPLEiD: ",sample_id)
-        break
-      end
-    end
-  end
-
   timber.clear_samples(sample_id, num_samples - 1)
 
   local found = false
-  for k, v in ipairs (fileselect.list) do
+  for k, v in ipairs(fileselect.list) do
     if v == file then found = true end
     if found then
       if sample_id > (num_samples - 1) then
         print("Max files loaded")
         break
       end
-      -- Check file type
       local lower_v = v:lower()
       if string.find(lower_v, ".wav") or string.find(lower_v, ".aif") or string.find(lower_v, ".aiff") then
         print("Loading samples", folder .. v, sample_id, audio.file_info(folder .. v))
         timber.load_sample(sample_id, folder .. v)
-        params:set("play_mode_" .. sample_id, 4) -- doesnt do anything?
+        params:set("play_mode_" .. sample_id, 4)
         sample_id = sample_id + 1
-        print("sAMPLEiD: ",sample_id)
+        print("sAMPLEiD: ", sample_id)
       else
         print("Skipped", v)
       end
@@ -112,7 +137,7 @@ function add_params()
 
   params:add_trigger("load_t", "+ Load Timber samples")
   params:set_action("load_t", function()
-    timber.FileSelect.enter(_path.audio,  function(file)
+    timber.FileSelect.enter(_path.audio, function(file)
       if file ~= "cancel" then
         load_folder(file, add)
       end
@@ -123,15 +148,18 @@ function add_params()
   local channels = {"All"}
   for i = 1, 16 do table.insert(channels, i) end
   params:add{type = "option", id = "midi_in_channel", name = "MIDI In Channel", options = channels}
-    
+
   params:add{type = "number", id = "midi_clock_in_device", name = "MIDI Clock In Device", min = 1, max = 4, default = 1, action = reconnect_midi_ins}
-  
+
   params:add_separator("Player")
-    
+
   params:add{type = "number", id = "bend_range", name = "Pitch Bend Range", min = 1, max = 48, default = 2}
-  
+
   params:add{type = "trigger", id = "launch_mode_all_one_shot", name = "Launch Mode: All One shot", action = function()
     for i = 36, num_samples - 1 do
+      params:set("play_mode_" .. i, 4)
+    end
+    for i = 1, 2 do
       params:set("play_mode_" .. i, 4)
     end
   end}
@@ -150,9 +178,15 @@ function add_params()
       params:set("quality_" .. i, 4)
     end
   end}
-  
-  params:add_separator()
-  -- Index zero to align with MIDI note numbers
+
+  params:add_separator("Keys Samples")
+  -- Slots 1 & 2 are the keys-mode samples, added individually
+  for i = 1, 2 do
+    timber.add_sample_params(i, true)
+    params:set("play_mode_" .. i, 4)
+  end
+  params:add_separator("MPC Samples")
+  -- Slots 36-51 are the player-mode samples (ch3, one sample per MIDI note)
   for i = 36, num_samples - 1 do
     local extra_params = {
       {type = "option", id = "launch_mode_" .. i, name = "Launch Mode", options = {"Gate", "Toggle"}, default = 1, action = function(value)
@@ -163,7 +197,7 @@ function add_params()
   end
 end
 
--- TIMBER CoNTROLLS
+-- TIMBER CONTROLS
 
 local function queue_note_event(event_type, sample_id, vel)
   if event_type == "on" then
@@ -181,18 +215,14 @@ end
 
 function note_on(sample_id, vel)
   if timber.samples_meta[sample_id].num_frames > 0 then
-    --print("note_on", sample_id)
     vel = vel or 1
     engine.noteOn(sample_id, MusicUtil.note_num_to_freq(60), vel, sample_id)
     sample_status[sample_id] = STATUS.PLAYING
-
   end
 end
 
 function note_off(sample_id)
-  --print("note_off", sample_id)
   engine.noteOff(sample_id)
-
 end
 
 local function set_pressure_voice(voice_id, pressure)
@@ -237,42 +267,74 @@ local function key_up(sample_id)
   end
 end
 
--- timber MIDI input
+-- MIDI input
 local function midi_event(device_id, data)
-  
+
   local msg = midi.to_msg(data)
   local channel_param = params:get("midi_in_channel")
-  
-  -- MIDI In
+
   if device_id == params:get("midi_in_device") then
     if channel_param == 1 or (channel_param > 1 and msg.ch == channel_param - 1) then
-      
-      -- Note off
-      if msg.type == "note_off" then
-        key_up(msg.note)
-      -- Note on
-      elseif msg.type == "note_on" then
-        key_down(msg.note, msg.vel / 127)
-        
-      -- Key pressure
-      elseif msg.type == "key_pressure" then
-        set_pressure_voice(msg.note, msg.val / 127)
-        
-      -- Channel pressure
-      elseif msg.type == "channel_pressure" then
-        set_pressure_all(msg.val / 127)
-        
-      -- Pitch bend
-      elseif msg.type == "pitchbend" then
-        local bend_st = (util.round(msg.val / 2)) / 8192 * 2 -1 -- Convert to -1 to 1
-        local bend_range = params:get("bend_range")
-        set_pitch_bend_all(bend_st * bend_range)
+
+      -- -------------------------------------------------------
+      -- CHANNELS 1 & 2 : keys mode
+      -- sample_id = ch - 1  (so ch1 → slot 1, ch2 → slot 2)
+      -- voice_id  = (ch-1)*128 + note  (polyphonic per-note tracking)
+      -- freq follows the MIDI note so it plays like a piano
+      -- -------------------------------------------------------
+      if msg.ch == 1 or msg.ch == 2 then
+        local sample_id = msg.ch          -- slot 1 or slot 2
+        local voice_id  = (msg.ch) * 128 + (msg.note or 0)
+
+        if msg.type == "note_off" then
+          engine.noteOff(voice_id)
+
+        elseif msg.type == "note_on" then
+          if timber.samples_meta[sample_id].num_frames > 0 then
+            engine.noteOn(voice_id, MusicUtil.note_num_to_freq(msg.note), msg.vel / 127, sample_id)
+          end
+
+        elseif msg.type == "key_pressure" then
+          set_pressure_voice(voice_id, msg.val / 127)
+
+        elseif msg.type == "channel_pressure" then
+          set_pressure_sample(sample_id, msg.val / 127)
+
+        elseif msg.type == "pitchbend" then
+          local bend_st = (util.round(msg.val / 2)) / 8192 * 2 - 1
+          set_pitch_bend_sample(sample_id, bend_st * params:get("bend_range"))
+        end
+
+      -- -------------------------------------------------------
+      -- CHANNEL 3 : player mode
+      -- MIDI note number = sample slot (36-51)
+      -- all play at middle C (freq fixed to note 60)
+      -- -------------------------------------------------------
+      elseif msg.ch == 3 then
+
+        if msg.type == "note_off" then
+          key_up(msg.note)
+
+        elseif msg.type == "note_on" then
+          key_down(msg.note, msg.vel / 127)
+
+        elseif msg.type == "key_pressure" then
+          set_pressure_voice(msg.note, msg.val / 127)
+
+        elseif msg.type == "channel_pressure" then
+          set_pressure_all(msg.val / 127)
+
+        elseif msg.type == "pitchbend" then
+          local bend_st = (util.round(msg.val / 2)) / 8192 * 2 - 1
+          set_pitch_bend_all(bend_st * params:get("bend_range"))
+        end
+
       end
     end
   end
 end
 
-local function reconnect_midi_ins()
+reconnect_midi_ins = function()
   midi_in_device.event = nil
   midi_clock_in_device.event = nil
   midi_in_device = midi.connect(params:get("midi_in_device"))
@@ -281,7 +343,8 @@ local function reconnect_midi_ins()
   midi_clock_in_device.event = function(data) midi_event(params:get("midi_clock_in_device"), data) end
 end
 
--- END TIMBER sTUFF
+-- END TIMBER STUFF
+
 -------------------------
 -- END TIMBER sTUFF
 -------------------------
@@ -346,7 +409,7 @@ function init()
         softcut.level_input_cut(i-2, i, 1.0) -- I don't understand channels. This may not be r ight.
     end
     softcut.level(i,0)
-    softcut.level_slew_time(i,0.01)
+    softcut.level_slew_time(i,0.1)
     softcut.post_filter_lp(i,1.0)
     softcut.post_filter_dry(i,0.0)
     softcut.post_filter_fc(i,17000)
